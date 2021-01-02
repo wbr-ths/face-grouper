@@ -6,19 +6,20 @@ from matplotlib import pyplot as plt
 import pickle
 import numpy as np
 from operator import add
-import time
 import json
 from shutil import copyfile
-
 from utils import improve_contrast_image_using_clahe, image_resize, image_size_limit, generate_weights
 
-IMAGE_PATH = 'images/test'
-ENCODINGS = 'encodings.dat'
-TOLERANCE = 0.55 # 0.51
-MODEL = 'cnn'
+
+SRC_IMAGE_PATH = 'images/test'
+DST_IMAGE_PATH = 'static/images/'
+ENCODINGS = 'encodings.dat' # just a caching file
+TOLERANCE = 0.55 # 0.6 is default
+MODEL = 'cnn' # use 'hog' if you dont have CUDA
 
 
 def load_face_encodings(image_path, encodings_path):
+    """Loads face encodings from cache or from files."""
 
     face_id = 0 # keeps track of person-id
 
@@ -44,7 +45,6 @@ def load_face_encodings(image_path, encodings_path):
 
             # preprocess image
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            #image = cv2.fastNlMeansDenoisingColored(image,None,10,10,7,21)
             image = improve_contrast_image_using_clahe(image)
             image = image_size_limit(image, 2200) # change if out of memory
 
@@ -85,7 +85,9 @@ def load_face_encodings(image_path, encodings_path):
             pickle.dump([encs, indexes], f)
         return encs, indexes
 
+
 def average_encoding(encodings):
+    """Returns average encoding from a list of encoding."""
     ret = [0]*128
     weights = generate_weights(len(encodings))
     for i in range(len(encodings)):
@@ -93,7 +95,9 @@ def average_encoding(encodings):
             ret[j] += encodings[i][j]*weights[i]
     return ret
 
+
 def average_encodings(encodings):
+    """Returns a list of average encodings from a 2d-list of encodings."""
     ret = []
     for encoding in encodings:
         if len(encoding) > 1:
@@ -104,80 +108,48 @@ def average_encodings(encodings):
     return np.array(ret).tolist()
 
 
-if __name__ == '__main__':
-
-    encodings, indexes = load_face_encodings(IMAGE_PATH, ENCODINGS)
-    print('found', len(encodings), 'faces')
-
+def face_grouping(encodings, indexes):
+    """Face grouping algo."""
     known = [[encodings[0]]]
     known_orgs = [[indexes[0]]]
-
     for i in range(1, len(encodings)):
-        #print('i', i)
-
-        #print(len(average_encodings(known)))
-        #print(encodings[i])
-
         tmp = face_recognition.face_distance(average_encodings(known), encodings[i])
         min_dist = tmp.min()
-
-
         if min_dist <= TOLERANCE:
-            #index = tmp.index(True)
             index = np.where(tmp==min_dist)[0][0]
-            #print(index)
-            #print('person found', index)
             known[index].append(encodings[i])
             known_orgs[index].append(indexes[i])
-            #exit()
-            #print(known[8])
         else:
-            #print('new person')
             known.append([])
             known[-1].append(encodings[i])
             known_orgs.append([])
             known_orgs[-1].append(indexes[i])
+    return known, known_orgs
 
 
+def generate_json(known, known_orgs, DST_IMAGE_PATH):
+    """Generates JSON."""
     nodes = [{'name': str(i)} for i in range(len(known))]
     for i in range(len(known_orgs)):
-        copyfile('crops/' + str(known_orgs[i][0]) + '.png', 'static/images/' + str(i) + '.png')
-
-   
+        copyfile('crops/' + str(known_orgs[i][0]) + '.png', DST_IMAGE_PATH + str(i) + '.png')
     links = []
     for i in range(len(known)-1):
         for j in range(i+1, len(known)):
             links.append({'source': i,
                           'target': j,
                           'distance': face_recognition.face_distance([average_encoding(known[i])], known[j][0])[0]})
-
     data = {'nodes': nodes, 'links': links}
-
     with open('data.json', 'w') as f:
         json.dump(data, f)
 
-    #for i in range(len(known)):
-        #if len(known[i]) >= 1:
-            #for j in range(len(known[i])):
+if __name__ == '__main__':
 
-                #pass
+    # load encodings
+    encodings, indexes = load_face_encodings(SRC_IMAGE_PATH, ENCODINGS)
+    print('found', len(encodings), 'faces')
 
-                #plt.plot(known[i][j])
-            
-                #image = cv2.imread('crops/' + str(known_orgs[i][j]) + '.png')
-                #image = cv2.imread('crops/' + str(indexes[known_orgs[i][j]]) + '.png')
-                #try:
-                #    os.mkdir('persons/' + str(i))
-                #except:
-                #    pass
-                #cv2.imwrite('persons/' + str(i) + '/' + str(j) + '.png', image)
-                #cv2.imwrite('persons/' + str(i) + '_' + str(j) + '.png', image)
+    # group faces
+    known, known_orgs = face_grouping(encodings, indexes)
 
-
-                #winname = str(known_orgs[i][j])
-                #cv2.imshow(winname, image)
-                #cv2.moveWindow(winname, 0,0)
-                #cv2.waitKey(0)
-                #cv2.destroyWindow(winname)
-
-            #plt.show()
+    # generating JSON
+    generate_json(known, known_orgs, DST_IMAGE_PATH)
