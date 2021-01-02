@@ -1,0 +1,41 @@
+body {
+    height: 100%;
+    width: 100%;
+    margin: 0px;
+    margin-top: 0px;
+    padding: 0px;
+    padding-top: 0px;
+    background: #222;
+    font-family: 'Poppins', sans-serif;
+    color: #fff;
+}
+
+.banner {
+    width: 100%;
+    height: 7%;
+    text-align: center;
+    line-height: 9vh;
+    font-size: 2vh;
+    text-shadow: 3px 3px black;
+}
+
+/*div {
+    border-style: solid;
+    border-color: coral;
+    box-align: center;
+}*/
+
+svg {
+    width: 100%;
+    height: 93%;
+}
+
+.link {
+    stroke: #ccc;
+}
+
+.node text {
+    pointer-events: none;
+    font: sans-serif;
+    fill: #ccc;
+}
