@@ -7,8 +7,10 @@ import pickle
 import numpy as np
 from operator import add
 import time
+import json
+from shutil import copyfile
 
-from utils import improve_contrast_image_using_clahe, image_resize, image_size_limit
+from utils import improve_contrast_image_using_clahe, image_resize, image_size_limit, generate_weights
 
 IMAGE_PATH = 'images/test'
 ENCODINGS = 'encodings.dat'
@@ -24,7 +26,8 @@ def load_face_encodings(image_path, encodings_path):
     if encodings_path in os.listdir():
         print('load encodings from cache')
         with open(encodings_path, 'rb') as f:
-            return pickle.load(f)
+            tmp = pickle.load(f)
+            return tmp[0], tmp[1]
     else:
         print('load encodings from files')
         encodings = []
@@ -41,12 +44,13 @@ def load_face_encodings(image_path, encodings_path):
 
             # preprocess image
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            #image = cv2.fastNlMeansDenoisingColored(image,None,10,10,7,21)
             image = improve_contrast_image_using_clahe(image)
-            image = image_size_limit(image, 1920, 1080)
+            image = image_size_limit(image, 2200) # change if out of memory
 
             # find faces in image
             locations = face_recognition.face_locations(image, model=MODEL, number_of_times_to_upsample=1)
-            encoding = face_recognition.face_encodings(image, locations)#, num_jitters=100)
+            encoding = face_recognition.face_encodings(image, locations, num_jitters=10, model='large')
             encodings += encoding
 
             for face_location in locations:
@@ -66,29 +70,6 @@ def load_face_encodings(image_path, encodings_path):
                 cv2.imwrite(f'crops/{face_id}.png', crop)
                 face_id += 1
 
-                '''
-                color = [0, 0, 255]
-                top_left = (face_location[3], face_location[0])
-                bottom_right = (face_location[1], face_location[2])
-                image = cv2.rectangle(image, top_left, bottom_right, color, 2)
-                top_left = (face_location[3], face_location[2])
-                bottom_right = (face_location[1], face_location[2] + 22)
-                cv2.rectangle(image, top_left, bottom_right, color, cv2.FILLED)
-                cv2.putText(image, str(locations.index(face_location)), (face_location[3] + 10, face_location[2] + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-                '''
-
-            '''winname = f'{image_path}/{file}'
-            cv2.imshow(winname, image)
-            cv2.moveWindow(winname, 0,0)
-            cv2.waitKey(0)
-            cv2.destroyWindow(winname)'''
-
-        # sort faces by image-size
-        #indexes = []
-        #for i in range(len(encodings)):
-        #    indexes.append(i)
-        #print(indexes)
-
         temp = []
         for i in range(len(encodings)):
             temp.append([crop_sizes[i], encodings[i], i])
@@ -101,18 +82,15 @@ def load_face_encodings(image_path, encodings_path):
 
         print('all images loaded')
         with open(encodings_path, 'wb') as f:
-            pickle.dump(encodings, f)
+            pickle.dump([encs, indexes], f)
         return encs, indexes
 
 def average_encoding(encodings):
-    ret = encodings[0]
-    #print(encodings)
-    for i in range(1, len(encodings)):
+    ret = [0]*128
+    weights = generate_weights(len(encodings))
+    for i in range(len(encodings)):
         for j in range(len(encodings[i])):
-            ret[j] += encodings[i][j]
-    for i in range(len(ret)):
-        ret[i] = ret[i]/len(encodings)
-    #print(ret)
+            ret[j] += encodings[i][j]*weights[i]
     return ret
 
 def average_encodings(encodings):
@@ -140,9 +118,14 @@ if __name__ == '__main__':
         #print(len(average_encodings(known)))
         #print(encodings[i])
 
-        tmp = face_recognition.compare_faces(average_encodings(known), encodings[i], TOLERANCE)
-        if True in tmp:
-            index = tmp.index(True)
+        tmp = face_recognition.face_distance(average_encodings(known), encodings[i])
+        min_dist = tmp.min()
+
+
+        if min_dist <= TOLERANCE:
+            #index = tmp.index(True)
+            index = np.where(tmp==min_dist)[0][0]
+            #print(index)
             #print('person found', index)
             known[index].append(encodings[i])
             known_orgs[index].append(indexes[i])
@@ -155,18 +138,40 @@ if __name__ == '__main__':
             known_orgs.append([])
             known_orgs[-1].append(indexes[i])
 
-    for i in range(len(known)):
-        if len(known[i]) >= 1:
-            for j in range(len(known[i])):
+
+    nodes = [{'name': str(i)} for i in range(len(known))]
+    for i in range(len(known_orgs)):
+        copyfile('crops/' + str(known_orgs[i][0]) + '.png', 'static/images/' + str(i) + '.png')
+
+   
+    links = []
+    for i in range(len(known)-1):
+        for j in range(i+1, len(known)):
+            links.append({'source': i,
+                          'target': j,
+                          'distance': face_recognition.face_distance([average_encoding(known[i])], known[j][0])[0]})
+
+    data = {'nodes': nodes, 'links': links}
+
+    with open('data.json', 'w') as f:
+        json.dump(data, f)
+
+    #for i in range(len(known)):
+        #if len(known[i]) >= 1:
+            #for j in range(len(known[i])):
+
+                #pass
+
                 #plt.plot(known[i][j])
             
-                image = cv2.imread('crops/' + str(known_orgs[i][j]) + '.png')
+                #image = cv2.imread('crops/' + str(known_orgs[i][j]) + '.png')
                 #image = cv2.imread('crops/' + str(indexes[known_orgs[i][j]]) + '.png')
-                try:
-                    os.mkdir('persons/' + str(i))
-                except:
-                    pass
-                cv2.imwrite('persons/' + str(i) + '/' + str(j) + '.png', image)
+                #try:
+                #    os.mkdir('persons/' + str(i))
+                #except:
+                #    pass
+                #cv2.imwrite('persons/' + str(i) + '/' + str(j) + '.png', image)
+                #cv2.imwrite('persons/' + str(i) + '_' + str(j) + '.png', image)
 
 
                 #winname = str(known_orgs[i][j])
@@ -176,4 +181,3 @@ if __name__ == '__main__':
                 #cv2.destroyWindow(winname)
 
             #plt.show()
-    

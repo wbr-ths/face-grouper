@@ -23,11 +23,22 @@ def image_resize(image, width = None, height = None, inter = cv2.INTER_AREA):
     resized = cv2.resize(image, dim, interpolation = inter)
     return resized
 
-def image_size_limit(image, width, height):
+def image_size_limit(image, size):
     h, w, _ = image.shape
-    if w/h < width/height:
-        if h > height:
-            return image_resize(image, height=height)
+    if w < h:
+        return image_resize(image, height=size)
     else:
-        if w > width:
-            return image_resize(image, width=width)
+        return image_resize(image, width=size)
+
+def generate_weights(size):
+    ret = []
+    remaining = 1
+    for i in range(0, size-1):
+        ret.append(remaining/2)
+        remaining /= 2
+    ret.append(remaining)
+    return ret
+
+if __name__ == '__main__':
+    print(generate_weights(10))
+    print(sum(generate_weights(10)))
