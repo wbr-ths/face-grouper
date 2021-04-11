@@ -1,27 +1,28 @@
 import face_recognition
 import os
 import cv2
-from os import listdir
+from os import listdir, remove, mkdir
 from matplotlib import pyplot as plt
 import pickle
 import numpy as np
 from operator import add
 import json
-from shutil import copyfile
+from shutil import copyfile, rmtree
 from utils import improve_contrast_image_using_clahe, image_resize, image_size_limit, generate_weights
+from app import start_app
 
 
-SRC_IMAGE_PATH = 'images/test'
+SRC_IMAGE_PATH = 'images/'
 DST_IMAGE_PATH = 'static/images/'
 ENCODINGS = 'encodings.dat' # just a caching file
-TOLERANCE = 0.55 # 0.6 is default
+TOLERANCE = 0.6 # 0.6 is default
 MODEL = 'cnn' # use 'hog' if you dont have CUDA
 
 
 def load_face_encodings(image_path, encodings_path):
-    """Loads face encodings from cache or from files."""
+    """Load face encodings from cache or from files."""
 
-    face_id = 0 # keeps track of person-id
+    face_id = 0
 
     # checking for cache
     if encodings_path in os.listdir():
@@ -46,7 +47,7 @@ def load_face_encodings(image_path, encodings_path):
             # preprocess image
             image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             image = improve_contrast_image_using_clahe(image)
-            image = image_size_limit(image, 2200) # change if out of memory
+            image = image_size_limit(image, 2000) # change if out of memory
 
             # find faces in image
             locations = face_recognition.face_locations(image, model=MODEL, number_of_times_to_upsample=1)
@@ -87,7 +88,7 @@ def load_face_encodings(image_path, encodings_path):
 
 
 def average_encoding(encodings):
-    """Returns average encoding from a list of encoding."""
+    """Return average encoding from a list of encoding."""
     ret = [0]*128
     weights = generate_weights(len(encodings))
     for i in range(len(encodings)):
@@ -97,7 +98,7 @@ def average_encoding(encodings):
 
 
 def average_encodings(encodings):
-    """Returns a list of average encodings from a 2d-list of encodings."""
+    """Return a list of average encodings from a 2d-list of encodings."""
     ret = []
     for encoding in encodings:
         if len(encoding) > 1:
@@ -128,7 +129,7 @@ def face_grouping(encodings, indexes):
 
 
 def generate_json(known, known_orgs, DST_IMAGE_PATH):
-    """Generates JSON."""
+    """Generate data.json."""
     nodes = [{'name': str(i)} for i in range(len(known))]
     for i in range(len(known_orgs)):
         copyfile('crops/' + str(known_orgs[i][0]) + '.png', DST_IMAGE_PATH + str(i) + '.png')
@@ -142,7 +143,25 @@ def generate_json(known, known_orgs, DST_IMAGE_PATH):
     with open('data.json', 'w') as f:
         json.dump(data, f)
 
+
+def drop_cache():
+    """Drop all cached files."""
+    rmtree('crops')
+    mkdir('crops')
+    rmtree('static/images')
+    mkdir('static/images')
+    if 'encodings.dat' in listdir():
+        remove('encodings.dat')
+    if 'data.json' in listdir():
+        remove('data.json')
+
+
+
 if __name__ == '__main__':
+
+    # drop cache
+    if input('Do you want to delete the cache? (YES/no)').lower() in ['yes', 'y', '']:
+        drop_cache()
 
     # load encodings
     encodings, indexes = load_face_encodings(SRC_IMAGE_PATH, ENCODINGS)
@@ -153,3 +172,5 @@ if __name__ == '__main__':
 
     # generating JSON
     generate_json(known, known_orgs, DST_IMAGE_PATH)
+
+    start_app()

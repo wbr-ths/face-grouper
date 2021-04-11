@@ -1,2 +1,3 @@
-# face-grouper
-Groups faces.
+# Face grouper
+
+![screenshot](screenshot.png)

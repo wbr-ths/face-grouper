@@ -46,7 +46,7 @@
                 .data(links)
                 .enter()
                 .append("line")
-                .attr("stroke-width", function (d) { return d.size; })
+                .attr("stroke-width", stroke_width)
                 .attr("class", "link"),
             node = svgElement.selectAll(".node")
                 .data(nodes)

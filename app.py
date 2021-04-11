@@ -2,9 +2,9 @@ from flask import Flask, render_template, request
 import json
 import threading
 
-FILE = 'infolk.json'
-# FILE = 'got_social_graph.json'
+FILE = 'data.json'
 data = {}
+
 
 app = Flask(__name__)
 app_loaded = False
