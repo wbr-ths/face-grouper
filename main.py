@@ -2,7 +2,6 @@ import face_recognition
 import os
 import cv2
 from os import listdir, remove, mkdir
-from matplotlib import pyplot as plt
 import pickle
 import numpy as np
 from operator import add
